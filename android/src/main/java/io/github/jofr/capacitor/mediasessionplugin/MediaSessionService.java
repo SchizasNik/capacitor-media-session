@@ -57,7 +57,6 @@ public class MediaSessionService extends Service {
     private boolean notificationUpdate = false;
 
     private MediaSessionPlugin plugin;
-    private MediaSessionCallback callback;
 
     private final IBinder binder = new LocalBinder();
 
@@ -74,7 +73,7 @@ public class MediaSessionService extends Service {
 
     @Override
     public boolean onUnbind(Intent intent) {
-        this.destroy();
+        destroy();
 
         return super.onUnbind(intent);
     }
@@ -82,77 +81,35 @@ public class MediaSessionService extends Service {
     public void connectAndInitialize(MediaSessionPlugin plugin, Intent intent) {
         this.plugin = plugin;
 
-        mediaSession = new MediaSessionCompat(this, "WebViewMediaSession");
-        mediaSession.setCallback(new MediaSessionCallback(plugin));
         mediaSession.setActive(true);
+        mediaSession.setCallback(new MediaSessionCallback(plugin));
 
-        playbackStateBuilder = new PlaybackStateCompat.Builder()
-                .setActions(PlaybackStateCompat.ACTION_PLAY)
-                .setState(PlaybackStateCompat.STATE_PAUSED, position, playbackSpeed);
-        mediaSession.setPlaybackState(playbackStateBuilder.build());
-
-        mediaMetadataBuilder = new MediaMetadataCompat.Builder()
-                .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration);
-        mediaSession.setMetadata(mediaMetadataBuilder.build());
-
-        notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel("playback", "Playback", NotificationManager.IMPORTANCE_LOW);
-            notificationManager.createNotificationChannel(channel);
-        }
-
-        notificationStyle = new MediaStyle().setMediaSession(mediaSession.getSessionToken());
-        notificationBuilder = new NotificationCompat.Builder(this, "playback")
-                .setStyle(notificationStyle)
-                .setSmallIcon(R.drawable.ic_baseline_volume_up_24)
-                .setContentIntent(PendingIntent.getActivity(getApplicationContext(), 0, intent, PendingIntent.FLAG_IMMUTABLE))
-                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC);
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-          startForeground(NOTIFICATION_ID, notificationBuilder.build(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
-        } else {
-          startForeground(NOTIFICATION_ID, notificationBuilder.build());
-        }
-
-        notificationActions.put("play", new NotificationCompat.Action(
-                R.drawable.ic_baseline_play_arrow_24, "Play", MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_PLAY_PAUSE)
-        ));
-        notificationActions.put("pause", new NotificationCompat.Action(
-                R.drawable.ic_baseline_pause_24, "Pause", MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_PLAY_PAUSE)
-        ));
-        notificationActions.put("seekbackward", new NotificationCompat.Action(
-                R.drawable.ic_baseline_replay_30_24, "Previous Track", MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_REWIND)
-        ));
-        notificationActions.put("seekforward", new NotificationCompat.Action(
-                R.drawable.ic_baseline_forward_30_24, "Next Track", MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_FAST_FORWARD)
-        ));
-        notificationActions.put("previoustrack", new NotificationCompat.Action(
-                R.drawable.ic_baseline_skip_previous_24, "Previous Track", MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS)
-        ));
-        notificationActions.put("nexttrack", new NotificationCompat.Action(
-                R.drawable.ic_baseline_skip_next_24, "Next Track", MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_SKIP_TO_NEXT)
-        ));
-        notificationActions.put("stop", new NotificationCompat.Action(
-                R.drawable.ic_baseline_stop_24, "Stop", MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_STOP)
-        ));
-
-        playbackStateActions.put("previoustrack", PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS);
-        playbackStateActions.put("seekbackward", PlaybackStateCompat.ACTION_REWIND);
-        playbackStateActions.put("play", PlaybackStateCompat.ACTION_PLAY_PAUSE);
-        playbackStateActions.put("pause", PlaybackStateCompat.ACTION_PLAY_PAUSE);
-        playbackStateActions.put("seekforward", PlaybackStateCompat.ACTION_FAST_FORWARD);
-        playbackStateActions.put("nexttrack", PlaybackStateCompat.ACTION_SKIP_TO_NEXT);
-        playbackStateActions.put("seekto", PlaybackStateCompat.ACTION_SEEK_TO);
-        playbackStateActions.put("stop", PlaybackStateCompat.ACTION_STOP);
+        notificationBuilder
+            .setContentIntent(PendingIntent.getActivity(getApplicationContext(), 0, intent, PendingIntent.FLAG_IMMUTABLE));
+        notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build());
     }
 
     public void destroy() {
-        stopForeground(true);
+        if (mediaSession != null) {
+            mediaSession.release();
+            mediaSession = null;
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE);
+        } else {
+            stopForeground(true);
+        }
+
         stopSelf();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        if (mediaSession == null) {
+            setUpMediaSessionAndNotification();
+        }
+
         MediaButtonReceiver.handleIntent(mediaSession, intent);
         return super.onStartCommand(intent, flags, startId);
     }
@@ -165,7 +122,7 @@ public class MediaSessionService extends Service {
         }
     }
 
-    public void setTitle(String title)  {
+    public void setTitle(String title) {
         if (!this.title.equals(title)) {
             this.title = title;
             mediaMetadataUpdate = true;
@@ -271,20 +228,20 @@ public class MediaSessionService extends Service {
 
         if (mediaMetadataUpdate) {
             mediaMetadataBuilder
-                    .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
-                    .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, artist)
-                    .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, album)
-                    .putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, artwork)
-                    .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration);
+                .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
+                .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, artist)
+                .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, album)
+                .putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, artwork)
+                .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration);
             mediaSession.setMetadata(mediaMetadataBuilder.build());
             mediaMetadataUpdate = false;
         }
 
         if (notificationUpdate) {
             notificationBuilder
-                    .setContentTitle(title)
-                    .setContentText(artist + " - " + album)
-                    .setLargeIcon(artwork);
+                .setContentTitle(title)
+                .setContentText(artist + " - " + album)
+                .setLargeIcon(artwork);
             notificationManager.notify(NOTIFICATION_ID, notificationBuilder.build());
             notificationUpdate = false;
         }
@@ -293,5 +250,74 @@ public class MediaSessionService extends Service {
     public void updatePossibleActions() {
         this.possibleActionsUpdate = true;
         this.update();
+    }
+
+    @Override
+    public void onTaskRemoved(Intent intent) {
+        destroy();
+
+        super.onTaskRemoved(intent);
+    }
+
+    private void setUpMediaSessionAndNotification() {
+        mediaSession = new MediaSessionCompat(this, "WebViewMediaSession");
+
+        playbackStateBuilder = new PlaybackStateCompat.Builder()
+            .setActions(PlaybackStateCompat.ACTION_PLAY)
+            .setState(PlaybackStateCompat.STATE_PAUSED, position, playbackSpeed);
+        mediaSession.setPlaybackState(playbackStateBuilder.build());
+
+        mediaMetadataBuilder = new MediaMetadataCompat.Builder()
+            .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration);
+        mediaSession.setMetadata(mediaMetadataBuilder.build());
+
+        notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel("playback", "Playback", NotificationManager.IMPORTANCE_LOW);
+            notificationManager.createNotificationChannel(channel);
+        }
+
+        notificationStyle = new MediaStyle().setMediaSession(mediaSession.getSessionToken());
+        notificationBuilder = new NotificationCompat.Builder(this, "playback")
+            .setStyle(notificationStyle)
+            .setSmallIcon(R.drawable.ic_baseline_volume_up_24)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIFICATION_ID, notificationBuilder.build(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
+        } else {
+            startForeground(NOTIFICATION_ID, notificationBuilder.build());
+        }
+
+        notificationActions.put("play", new NotificationCompat.Action(
+            R.drawable.ic_baseline_play_arrow_24, "Play", MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_PLAY_PAUSE)
+        ));
+        notificationActions.put("pause", new NotificationCompat.Action(
+            R.drawable.ic_baseline_pause_24, "Pause", MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_PLAY_PAUSE)
+        ));
+        notificationActions.put("seekbackward", new NotificationCompat.Action(
+            R.drawable.ic_baseline_replay_30_24, "Previous Track", MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_REWIND)
+        ));
+        notificationActions.put("seekforward", new NotificationCompat.Action(
+            R.drawable.ic_baseline_forward_30_24, "Next Track", MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_FAST_FORWARD)
+        ));
+        notificationActions.put("previoustrack", new NotificationCompat.Action(
+            R.drawable.ic_baseline_skip_previous_24, "Previous Track", MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS)
+        ));
+        notificationActions.put("nexttrack", new NotificationCompat.Action(
+            R.drawable.ic_baseline_skip_next_24, "Next Track", MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_SKIP_TO_NEXT)
+        ));
+        notificationActions.put("stop", new NotificationCompat.Action(
+            R.drawable.ic_baseline_stop_24, "Stop", MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_STOP)
+        ));
+
+        playbackStateActions.put("previoustrack", PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS);
+        playbackStateActions.put("seekbackward", PlaybackStateCompat.ACTION_REWIND);
+        playbackStateActions.put("play", PlaybackStateCompat.ACTION_PLAY_PAUSE);
+        playbackStateActions.put("pause", PlaybackStateCompat.ACTION_PLAY_PAUSE);
+        playbackStateActions.put("seekforward", PlaybackStateCompat.ACTION_FAST_FORWARD);
+        playbackStateActions.put("nexttrack", PlaybackStateCompat.ACTION_SKIP_TO_NEXT);
+        playbackStateActions.put("seekto", PlaybackStateCompat.ACTION_SEEK_TO);
+        playbackStateActions.put("stop", PlaybackStateCompat.ACTION_STOP);
     }
 }
