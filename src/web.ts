@@ -3,6 +3,16 @@ import { WebPlugin } from '@capacitor/core';
 import type { MetadataOptions, PlaybackStateOptions, ActionHandlerOptions, ActionHandler, PositionStateOptions, MediaSessionPlugin } from './definitions';
 
 export class MediaSessionWeb extends WebPlugin implements MediaSessionPlugin {
+    async setDefaultImage(options: {
+        image: string;
+    }): Promise<void> {
+        if ('mediaSession' in navigator) {
+            console.log(options)
+        } else {
+            throw this.unavailable('Media Session API not available in this browser.');
+        }
+    }
+
     async setMetadata(options: MetadataOptions): Promise<void> {
         if ('mediaSession' in navigator) {
             navigator.mediaSession.metadata = new MediaMetadata(options);

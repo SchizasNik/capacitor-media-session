@@ -30,6 +30,7 @@ __There is one notable difference compared to the Web API__: You have to explici
 
 <docgen-index>
 
+* [`setDefaultImage(...)`](#setdefaultimage)
 * [`setMetadata(...)`](#setmetadata)
 * [`setPlaybackState(...)`](#setplaybackstate)
 * [`setActionHandler(...)`](#setactionhandler)
@@ -41,6 +42,21 @@ __There is one notable difference compared to the Web API__: You have to explici
 
 <docgen-api>
 <!--Update the source file JSDoc comments and rerun docgen to update the docs below-->
+
+### setDefaultImage(...)
+
+```typescript
+setDefaultImage(options: { image: string; }) => Promise<void>
+```
+
+Sets the default media image. This will be used when the provided artwork fails to load or no artwork is provided.
+
+| Param         | Type                            |
+| ------------- | ------------------------------- |
+| **`options`** | <code>{ image: string; }</code> |
+
+--------------------
+
 
 ### setMetadata(...)
 
