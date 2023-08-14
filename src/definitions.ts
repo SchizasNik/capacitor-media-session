@@ -27,6 +27,12 @@ export interface PositionStateOptions {
 }
 
 export interface MediaSessionPlugin {
+     /**
+     * Sets the default media image. This will be used when the provided artwork fails to load or no artwork is provided.
+     */
+    setDefaultImage(options: {
+        image: string;
+    }): Promise<void>;
     /**
      * Sets metadata of the currently playing media. Analogue to setting the
      * [metadata property of the MediaSession

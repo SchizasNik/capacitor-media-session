@@ -121,19 +121,36 @@ public class MediaSessionPlugin extends Plugin {
         return null;
     }
 
+   @PluginMethod
+    public void setDefaultImage(PluginCall call) throws JSONException {
+        String defaultImage = call.getString("image");
+        this.defaultImage = defaultImage;
+    }
+
     @PluginMethod
     public void setMetadata(PluginCall call) throws JSONException, IOException {
         title = call.getString("title", title);
         artist = call.getString("artist", artist);
         album = call.getString("album", album);
 
+        try {
         final JSArray artworkArray = call.getArray("artwork");
         final List<JSONObject> artworkList = artworkArray.toList();
         for (JSONObject artwork : artworkList) {
             String src = artwork.getString("src");
             if (src != null) {
+                if(src.equals("")){
+                    this.artwork = null;
+                    break;
+                }
                 this.artwork = urlToBitmap(src);
+                if(this.artwork == null) {
+                    this.artwork = urlToBitmap(this.defaultImage);
+                }
             }
+        }
+        } catch(Exception e) {
+            this.artwork = urlToBitmap(this.defaultImage);
         }
 
         if (service != null) { updateServiceMetadata(); };
