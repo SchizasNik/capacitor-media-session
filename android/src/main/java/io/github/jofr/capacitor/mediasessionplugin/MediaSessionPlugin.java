@@ -37,6 +37,7 @@ public class MediaSessionPlugin extends Plugin {
 
     private boolean startServiceOnlyDuringPlayback = true;
 
+    private String defaultImage = "";
     private String title = "";
     private String artist = "";
     private String album = "";
